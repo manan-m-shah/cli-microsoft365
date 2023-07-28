@@ -1,7 +1,7 @@
 import { User } from '@microsoft/microsoft-graph-types';
 import { Logger } from '../../../../cli/Logger';
 import GlobalOptions from '../../../../GlobalOptions';
-import request from '../../../../request';
+import request, { CliRequestOptions } from '../../../../request';
 import { formatting } from '../../../../utils/formatting';
 import { validation } from '../../../../utils/validation';
 import GraphCommand from '../../../base/GraphCommand';
@@ -16,6 +16,7 @@ export interface Options extends GlobalOptions {
   userName?: string;
   email?: string;
   properties?: string;
+  withManager?: boolean;
 }
 
 class AadUserGetCommand extends GraphCommand {
@@ -42,7 +43,8 @@ class AadUserGetCommand extends GraphCommand {
         id: typeof args.options.id !== 'undefined',
         userName: typeof args.options.userName !== 'undefined',
         email: typeof args.options.email !== 'undefined',
-        properties: args.options.properties
+        properties: args.options.properties,
+        withManager: typeof args.options.withManager !== 'undefined'
       });
     });
   }
@@ -60,6 +62,9 @@ class AadUserGetCommand extends GraphCommand {
       },
       {
         option: '-p, --properties [properties]'
+      },
+      {
+        option: '--withManager'
       }
     );
   }
@@ -102,7 +107,11 @@ class AadUserGetCommand extends GraphCommand {
       requestUrl += `?$filter=mail eq '${formatting.encodeQueryParameter(args.options.email as string)}'${properties}`;
     }
 
-    const requestOptions: any = {
+    if (args.options.withManager) {
+      requestUrl += '&$expand=manager($select=displayName,userPrincipalName,id,mail)';
+    }
+
+    const requestOptions: CliRequestOptions = {
       url: requestUrl,
       headers: {
         accept: 'application/json;odata.metadata=none'

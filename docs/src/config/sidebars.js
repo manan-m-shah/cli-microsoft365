@@ -336,6 +336,11 @@ const sidebars = {
               type: 'doc',
               label: 'sp get',
               id: 'cmd/aad/sp/sp-get'
+            },
+            {
+              type: 'doc',
+              label: 'sp list',
+              id: 'cmd/aad/sp/sp-list'
             }
           ]
         },
@@ -1135,6 +1140,16 @@ const sidebars = {
               type: 'doc',
               label: 'app consent set',
               id: 'cmd/pa/app/app-consent-set'
+            },
+            {
+              type: 'doc',
+              label: 'app owner set',
+              id: 'cmd/pa/app/app-owner-set'
+            },
+            {
+              type: 'doc',
+              label: 'app permission list',
+              id: 'cmd/pa/app/app-permission-list'
             }
           ]
         },
@@ -1814,6 +1829,11 @@ const sidebars = {
               type: 'doc',
               label: 'applicationcustomizer remove',
               id: 'cmd/spo/applicationcustomizer/applicationcustomizer-remove'
+            },
+            {
+              type: 'doc',
+              label: 'applicationcustomizer set',
+              id: 'cmd/spo/applicationcustomizer/applicationcustomizer-set'
             }
           ]
         },
@@ -2073,6 +2093,11 @@ const sidebars = {
               type: 'doc',
               label: 'file checkout',
               id: 'cmd/spo/file/file-checkout'
+            },
+            {
+              type: 'doc',
+              label: 'file checkout undo',
+              id: 'cmd/spo/file/file-checkout-undo'
             },
             {
               type: 'doc',
@@ -2496,6 +2521,11 @@ const sidebars = {
               type: 'doc',
               label: 'list roleinheritance reset',
               id: 'cmd/spo/list/list-roleinheritance-reset'
+            },
+            {
+              type: 'doc',
+              label: 'list sensitivitylabel ensure',
+              id: 'cmd/spo/list/list-sensitivitylabel-ensure'
             },
             {
               type: 'doc',
@@ -3279,6 +3309,26 @@ const sidebars = {
             },
             {
               type: 'doc',
+              label: 'tenant applicationcustomizer set',
+              id: 'cmd/spo/tenant/tenant-applicationcustomizer-set'
+            },
+            {
+              type: 'doc',
+              label: 'tenant commandset add',
+              id: 'cmd/spo/tenant/tenant-commandset-add'
+            },
+            {
+              type: 'doc',
+              label: 'tenant commandset get',
+              id: 'cmd/spo/tenant/tenant-commandset-get'
+            },
+            {
+              type: 'doc',
+              label: 'tenant commandset list',
+              id: 'cmd/spo/tenant/tenant-commandset-list'
+            },
+            {
+              type: 'doc',
               label: 'tenant commandset remove',
               id: 'cmd/spo/tenant/tenant-commandset-remove'
             },
@@ -3606,6 +3656,11 @@ const sidebars = {
               type: 'doc',
               label: 'chat list',
               id: 'cmd/teams/chat/chat-list'
+            },
+            {
+              type: 'doc',
+              label: 'chat member add',
+              id: 'cmd/teams/chat/chat-member-add'
             },
             {
               type: 'doc',

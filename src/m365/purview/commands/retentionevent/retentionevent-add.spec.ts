@@ -8,9 +8,9 @@ import request from '../../../../request';
 import { pid } from '../../../../utils/pid';
 import { sinonUtil } from '../../../../utils/sinonUtil';
 import commands from '../../commands';
-import { accessToken } from '../../../../utils/accessToken';
 import { CommandInfo } from '../../../../cli/CommandInfo';
 import { Cli } from '../../../../cli/Cli';
+import { session } from '../../../../utils/session';
 const command: Command = require('./retentionevent-add');
 
 describe(commands.RETENTIONEVENT_ADD, () => {
@@ -88,9 +88,10 @@ describe(commands.RETENTIONEVENT_ADD, () => {
   let commandInfo: CommandInfo;
 
   before(() => {
-    sinon.stub(auth, 'restoreAuth').callsFake(() => Promise.resolve());
-    sinon.stub(telemetry, 'trackEvent').callsFake(() => { });
-    sinon.stub(pid, 'getProcessName').callsFake(() => '');
+    sinon.stub(auth, 'restoreAuth').resolves();
+    sinon.stub(telemetry, 'trackEvent').returns();
+    sinon.stub(pid, 'getProcessName').returns('');
+    sinon.stub(session, 'getId').returns('');
     auth.service.connected = true;
     auth.service.accessTokens[auth.defaultResource] = {
       expiresOn: 'abc',
@@ -114,12 +115,10 @@ describe(commands.RETENTIONEVENT_ADD, () => {
     };
     loggerLogSpy = sinon.spy(logger, 'log');
     (command as any).items = [];
-    sinon.stub(accessToken, 'isAppOnlyAccessToken').callsFake(() => false);
   });
 
   afterEach(() => {
     sinonUtil.restore([
-      accessToken.isAppOnlyAccessToken,
       request.post,
       request.get
     ]);
@@ -156,7 +155,7 @@ describe(commands.RETENTIONEVENT_ADD, () => {
 
   it('adds retention event with minimal required parameters and assetIds', async () => {
     sinon.stub(request, 'post').callsFake(async (opts) => {
-      if (opts.url === `https://graph.microsoft.com/beta/security/triggers/retentionEvents`) {
+      if (opts.url === `https://graph.microsoft.com/v1.0/security/triggers/retentionEvents`) {
         return EventResponse;
       }
 
@@ -169,7 +168,7 @@ describe(commands.RETENTIONEVENT_ADD, () => {
 
   it('adds retention event with minimal required parameters and keywords', async () => {
     sinon.stub(request, 'post').callsFake(async (opts) => {
-      if (opts.url === `https://graph.microsoft.com/beta/security/triggers/retentionEvents`) {
+      if (opts.url === `https://graph.microsoft.com/v1.0/security/triggers/retentionEvents`) {
         return EventResponse;
       }
 
@@ -182,7 +181,7 @@ describe(commands.RETENTIONEVENT_ADD, () => {
 
   it('adds retention event with all parameters', async () => {
     sinon.stub(request, 'post').callsFake(async (opts) => {
-      if (opts.url === `https://graph.microsoft.com/beta/security/triggers/retentionEvents`) {
+      if (opts.url === `https://graph.microsoft.com/v1.0/security/triggers/retentionEvents`) {
         return EventResponse;
       }
 
@@ -195,7 +194,7 @@ describe(commands.RETENTIONEVENT_ADD, () => {
 
   it('adds retention event with minimal required parameters and assetIds based on event type name', async () => {
     sinon.stub(request, 'post').callsFake(async (opts) => {
-      if (opts.url === `https://graph.microsoft.com/beta/security/triggers/retentionEvents`) {
+      if (opts.url === `https://graph.microsoft.com/v1.0/security/triggers/retentionEvents`) {
         return EventResponse;
       }
 
@@ -203,7 +202,7 @@ describe(commands.RETENTIONEVENT_ADD, () => {
     });
 
     sinon.stub(request, 'get').callsFake(async (opts) => {
-      if (opts.url === `https://graph.microsoft.com/beta/security/triggerTypes/retentionEventTypes`) {
+      if (opts.url === `https://graph.microsoft.com/v1.0/security/triggerTypes/retentionEventTypes`) {
         return eventTypeResponse;
       }
 
@@ -214,17 +213,9 @@ describe(commands.RETENTIONEVENT_ADD, () => {
     assert(loggerLogSpy.calledWith(EventResponse));
   });
 
-  it('throws error if something fails using application permissions', async () => {
-    sinonUtil.restore([accessToken.isAppOnlyAccessToken]);
-    sinon.stub(accessToken, 'isAppOnlyAccessToken').callsFake(() => true);
-
-    await assert.rejects(command.action(logger, { options: {} } as any),
-      new CommandError(`This command does not support application permissions.`));
-  });
-
   it('throws error when no event type found', async () => {
     sinon.stub(request, 'get').callsFake(async (opts) => {
-      if (opts.url === `https://graph.microsoft.com/beta/security/triggerTypes/retentionEventTypes`) {
+      if (opts.url === `https://graph.microsoft.com/v1.0/security/triggerTypes/retentionEventTypes`) {
         return ({ "value": [] });
       }
 

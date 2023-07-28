@@ -125,6 +125,14 @@ describe(commands.BUCKET_LIST, () => {
   };
 
   let cli: Cli;
+  const planResponse = {
+    value: [{
+      id: 'iVPMIgdku0uFlou-KLNg6MkAE1O2',
+      title: 'My Planner'
+    }]
+  };
+
+
   let log: string[];
   let logger: Logger;
   let loggerLogSpy: sinon.SinonSpy;
@@ -132,10 +140,10 @@ describe(commands.BUCKET_LIST, () => {
 
   before(() => {
     cli = Cli.getInstance();
-    sinon.stub(auth, 'restoreAuth').callsFake(() => Promise.resolve());
-    sinon.stub(telemetry, 'trackEvent').callsFake(() => { });
-    sinon.stub(pid, 'getProcessName').callsFake(() => '');
-    sinon.stub(session, 'getId').callsFake(() => '');
+    sinon.stub(auth, 'restoreAuth').resolves();
+    sinon.stub(telemetry, 'trackEvent').returns();
+    sinon.stub(pid, 'getProcessName').returns('');
+    sinon.stub(session, 'getId').returns('');
     auth.service.connected = true;
     auth.service.accessTokens[(command as any).resource] = {
       accessToken: 'abc',
@@ -145,17 +153,20 @@ describe(commands.BUCKET_LIST, () => {
   });
 
   beforeEach(() => {
-    sinon.stub(request, 'get').callsFake((opts) => {
+    sinon.stub(request, 'get').callsFake(async (opts) => {
+      if (opts.url === `https://graph.microsoft.com/beta/planner/rosters/RuY-PSpdw02drevnYDTCJpgAEfoI/plans`) {
+        return planResponse;
+      }
       if (opts.url === `https://graph.microsoft.com/v1.0/groups?$filter=displayName eq '${formatting.encodeQueryParameter('My Planner Group')}'`) {
-        return Promise.resolve(groupByDisplayNameResponse);
+        return groupByDisplayNameResponse;
       }
       if (opts.url === `https://graph.microsoft.com/v1.0/groups/0d0402ee-970f-4951-90b5-2f24519d2e40/planner/plans`) {
-        return Promise.resolve(plansInOwnerGroup);
+        return plansInOwnerGroup;
       }
       if (opts.url === `https://graph.microsoft.com/v1.0/planner/plans/iVPMIgdku0uFlou-KLNg6MkAE1O2/buckets`) {
-        return Promise.resolve(bucketListResponse);
+        return bucketListResponse;
       }
-      return Promise.reject('Invalid Request');
+      throw 'Invalid request';
     });
     log = [];
     logger = {
@@ -188,7 +199,7 @@ describe(commands.BUCKET_LIST, () => {
   });
 
   it('has correct name', () => {
-    assert.strictEqual(command.name.startsWith(commands.BUCKET_LIST), true);
+    assert.strictEqual(command.name, commands.BUCKET_LIST);
   });
 
   it('has a description', () => {
@@ -197,45 +208,6 @@ describe(commands.BUCKET_LIST, () => {
 
   it('defines correct properties for the default output', () => {
     assert.deepStrictEqual(command.defaultProperties(), ['id', 'name', 'planId', 'orderHint']);
-  });
-
-  it('fails validation if neither the planId nor planTitle are provided.', async () => {
-    const actual = await command.validate({
-      options: {
-        debug: true
-      }
-    }, commandInfo);
-    assert.notStrictEqual(actual, true);
-  });
-
-  it('fails validation when both planId and planTitle are specified', async () => {
-    const actual = await command.validate({
-      options: {
-        planId: 'iVPMIgdku0uFlou-KLNg6MkAE1O2',
-        planTitle: 'My Planner'
-      }
-    }, commandInfo);
-    assert.notStrictEqual(actual, true);
-  });
-
-  it('fails validation when planTitle is specified without ownerGroupId or ownerGroupName', async () => {
-    const actual = await command.validate({
-      options: {
-        planTitle: 'My Planner Plan'
-      }
-    }, commandInfo);
-    assert.notStrictEqual(actual, true);
-  });
-
-  it('fails validation when planTitle is specified with both ownerGroupId and ownerGroupName', async () => {
-    const actual = await command.validate({
-      options: {
-        planTitle: 'My Planner Plan',
-        ownerGroupId: '0d0402ee-970f-4951-90b5-2f24519d2e40',
-        ownerGroupName: 'My Planner Group'
-      }
-    }, commandInfo);
-    assert.notStrictEqual(actual, true);
   });
 
   it('passes validation when valid planId is specified', async () => {
@@ -306,13 +278,22 @@ describe(commands.BUCKET_LIST, () => {
     assert(loggerLogSpy.calledWith(bucketListResponseValue));
   });
 
+  it('correctly lists planner buckets by rosterId', async () => {
+    const options: any = {
+      rosterId: 'RuY-PSpdw02drevnYDTCJpgAEfoI'
+    };
+
+    await command.action(logger, { options: options } as any);
+    assert(loggerLogSpy.calledWith(bucketListResponseValue));
+  });
+
   it('fails validation when ownerGroupName not found', async () => {
     sinonUtil.restore(request.get);
-    sinon.stub(request, 'get').callsFake((opts) => {
+    sinon.stub(request, 'get').callsFake(async (opts) => {
       if ((opts.url as string).indexOf('/groups?$filter=displayName') > -1) {
-        return Promise.resolve({ value: [] });
+        return { value: [] };
       }
-      return Promise.reject('Invalid request');
+      throw 'Invalid request';
     });
 
     await assert.rejects(command.action(logger, {
@@ -325,9 +306,7 @@ describe(commands.BUCKET_LIST, () => {
 
   it('correctly handles API OData error', async () => {
     sinonUtil.restore(request.get);
-    sinon.stub(request, 'get').callsFake(() => {
-      return Promise.reject("An error has occurred.");
-    });
+    sinon.stub(request, 'get').rejects(new Error("An error has occurred."));
 
     await assert.rejects(command.action(logger, { options: {} } as any), new CommandError("An error has occurred."));
   });

@@ -11,7 +11,7 @@ import { session } from '../../../../utils/session';
 import { sinonUtil } from '../../../../utils/sinonUtil';
 import commands from '../../commands';
 import { Cli } from '../../../../cli/Cli';
-import * as AadUserGetCommand from '../../../aad/commands/user/user-get';
+import { aadUser } from '../../../../utils/aadUser';
 const command: Command = require('./roster-member-add');
 
 describe(commands.ROSTER_MEMBER_ADD, () => {
@@ -31,10 +31,10 @@ describe(commands.ROSTER_MEMBER_ADD, () => {
   let loggerLogSpy: sinon.SinonSpy;
 
   before(() => {
-    sinon.stub(auth, 'restoreAuth').callsFake(() => Promise.resolve());
-    sinon.stub(telemetry, 'trackEvent').callsFake(() => { });
-    sinon.stub(pid, 'getProcessName').callsFake(() => '');
-    sinon.stub(session, 'getId').callsFake(() => '');
+    sinon.stub(auth, 'restoreAuth').resolves();
+    sinon.stub(telemetry, 'trackEvent').returns();
+    sinon.stub(pid, 'getProcessName').returns('');
+    sinon.stub(session, 'getId').returns('');
     auth.service.connected = true;
     commandInfo = Cli.getCommandInfo(command);
   });
@@ -58,7 +58,7 @@ describe(commands.ROSTER_MEMBER_ADD, () => {
   afterEach(() => {
     sinonUtil.restore([
       request.post,
-      Cli.executeCommandWithOutput
+      aadUser.getUserIdByUpn
     ]);
   });
 
@@ -119,15 +119,7 @@ describe(commands.ROSTER_MEMBER_ADD, () => {
   });
 
   it('adds a new member to the roster by userName', async () => {
-    sinon.stub(Cli, 'executeCommandWithOutput').callsFake(async (command): Promise<any> => {
-      if (command === AadUserGetCommand) {
-        return ({
-          stdout: `{ "businessPhones": [], "displayName": "John Doe", "givenName": null, "jobTitle": "CLI for Microsoft 365 contributor", "mail": "john.doe@contoso.com", "mobilePhone": null, "officeLocation": null, "preferredLanguage": null, "surname": "John", "userPrincipalName": "john.doe@contoso.com", "id": "${validUserId}" }`
-        });
-      }
-
-      throw 'Unknown case';
-    });
+    sinon.stub(aadUser, 'getUserIdByUpn').resolves(validUserId);
 
     sinon.stub(request, 'post').callsFake(async opts => {
       if (opts.url === `https://graph.microsoft.com/beta/planner/rosters/${validRosterId}/members`) {
@@ -147,7 +139,7 @@ describe(commands.ROSTER_MEMBER_ADD, () => {
         message: 'The requested item is not found.'
       }
     };
-    sinon.stub(request, 'post').callsFake(async () => { throw error; });
+    sinon.stub(request, 'post').rejects(error);
 
     await assert.rejects(command.action(logger, {
       options: { rosterId: validRosterId, userId: validUserId }

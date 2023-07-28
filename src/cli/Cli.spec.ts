@@ -171,6 +171,18 @@ class MockCommandWithPrompt extends AnonymousCommand {
   }
 }
 
+class MockCommandWithHandleMultipleResultsFound extends AnonymousCommand {
+  public get name(): string {
+    return 'cli mock interactive prompt';
+  }
+  public get description(): string {
+    return 'Mock command with interactive prompt';
+  }
+  public async commandAction(): Promise<void> {
+    Cli.handleMultipleResultsFound(`Multiple values with name found. Pick one`, `Multiple values with name found.`, { '1': { 'id': '1', 'title': 'Option1' }, '2': { 'id': '2', 'title': 'Option2' } });
+  }
+}
+
 class MockCommandWithOutput extends AnonymousCommand {
   public get name(): string {
     return 'cli mock output';
@@ -1224,6 +1236,31 @@ describe('Cli', () => {
       }, e => done(e));
   });
 
+  it('calls inquirer when command shows interactive prompt and executed with output', (done) => {
+    sinon.stub(Cli.getInstance(), 'getSettingWithDefaultValue').callsFake((() => true));
+    const promptStub: sinon.SinonStub = sinon.stub(inquirer, 'prompt').callsFake(() => Promise.resolve() as any);
+    const mockCommandWithHandleMultipleResultsFound = new MockCommandWithHandleMultipleResultsFound();
+
+    Cli
+      .executeCommandWithOutput(mockCommandWithHandleMultipleResultsFound, { options: { _: [] } })
+      .then(_ => {
+        try {
+          assert(promptStub.called);
+          done();
+        }
+        catch (e) {
+          done(e);
+        }
+      }, e => done(e));
+  });
+
+  it('throws error when interactive mode not set', async () => {
+    const error = `Multiple values with name found.`;
+    sinon.stub(Cli.getInstance(), 'getSettingWithDefaultValue').callsFake((() => false));
+    await assert.rejects((Cli.handleMultipleResultsFound(`Multiple values with name found. Pick one`, error, { '1': { 'id': '1', 'title': 'Option1' }, '2': { 'id': '2', 'title': 'Option2' } })
+    ), 'error');
+  });
+
   it('correctly handles error when executing command', (done) => {
     sinon.stub(mockCommand, 'commandAction').callsFake(() => { throw 'Error'; });
     Cli
@@ -2195,4 +2232,44 @@ describe('Cli', () => {
     const spyShouldTrimOutput = Cli.shouldTrimOutput('json');
     assert.strictEqual(spyShouldTrimOutput, false);
   });
+
+  it('does not show help when output is set to none', (done) => {
+    cli
+      .execute(rootFolder, ['cli', 'completion', 'clink', 'update', '-h', 'examples', '--output', 'none'])
+      .then(_ => {
+        try {
+          assert.strictEqual(log.length === 0, true);
+          done();
+        }
+        catch (e) {
+          done(e);
+        }
+      }, e => done(e));
+  });
+
+  it(`shows no output on succesful run with output set to none`, (done) => {
+    cli
+      .execute(rootFolder, ['cli', 'mock', 'boolean', 'rewrite', '--booleanParameterX', 'true', '--booleanParameterY', 'false', '--output', 'none'])
+      .then(_ => {
+        try {
+          assert.strictEqual(cliLogStub.notCalled, true);
+          assert.strictEqual(cliErrorStub.notCalled, true);
+          done();
+        }
+        catch (e) {
+          done(e);
+        }
+      }, e => done(e));
+  });
+
+  it(`shows no output when a validation error occurs in and output is set to none`, (done) => {
+    cli
+      .execute(rootFolder, ['cli', 'mock', 'boolean', 'rewrite', '--booleanParameterX', 'folse', '--output', 'none'])
+      .then(_ => {
+        assert(cliErrorStub.notCalled);
+        assert(cliLogStub.notCalled);
+        done();
+      }, _ => done('Promise fulfilled with error, no error expected'));
+  });
+
 });

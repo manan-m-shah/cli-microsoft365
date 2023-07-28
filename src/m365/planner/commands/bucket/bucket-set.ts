@@ -17,6 +17,7 @@ interface Options extends GlobalOptions {
   name?: string;
   planId?: string;
   planTitle?: string;
+  rosterId?: string;
   ownerGroupId?: string;
   ownerGroupName?: string;
   newName?: string;
@@ -48,6 +49,7 @@ class PlannerBucketSetCommand extends GraphCommand {
         name: typeof args.options.name !== 'undefined',
         planId: typeof args.options.planId !== 'undefined',
         planTitle: typeof args.options.planTitle !== 'undefined',
+        rosterId: typeof args.options.rosterId !== 'undefined',
         ownerGroupId: typeof args.options.ownerGroupId !== 'undefined',
         ownerGroupName: typeof args.options.ownerGroupName !== 'undefined',
         newName: typeof args.options.newName !== 'undefined',
@@ -71,6 +73,9 @@ class PlannerBucketSetCommand extends GraphCommand {
         option: "--planTitle [planTitle]"
       },
       {
+        option: '--rosterId [rosterId]'
+      },
+      {
         option: '--ownerGroupId [ownerGroupId]'
       },
       {
@@ -88,39 +93,21 @@ class PlannerBucketSetCommand extends GraphCommand {
   #initValidators(): void {
     this.validators.push(
       async (args: CommandArgs) => {
-        if (args.options.id) {
-          if (args.options.planId || args.options.planTitle || args.options.ownerGroupId || args.options.ownerGroupName) {
-            return 'Don\'t specify planId, planTitle, ownerGroupId or ownerGroupName when using id';
-          }
+        if (args.options.id && (args.options.planId || args.options.planTitle || args.options.ownerGroupId || args.options.ownerGroupName || args.options.rosterId)) {
+          return 'Don\'t specify planId, planTitle, ownerGroupId, ownerGroupName or rosterId when using id';
         }
 
         if (args.options.name) {
-          if (!args.options.planId && !args.options.planTitle) {
-            return 'Specify either planId or planTitle when using name';
+          if (args.options.ownerGroupId && !validation.isValidGuid(args.options.ownerGroupId)) {
+            return `${args.options.ownerGroupId} is not a valid GUID`;
           }
 
-          if (args.options.planId && args.options.planTitle) {
-            return 'Specify either planId or planTitle when using name but not both';
+          if (args.options.planId && (args.options.ownerGroupId || args.options.ownerGroupName)) {
+            return 'Don\'t specify ownerGroupId or ownerGroupName when using planId';
           }
 
-          if (args.options.planTitle) {
-            if (!args.options.ownerGroupId && !args.options.ownerGroupName) {
-              return 'Specify either ownerGroupId or ownerGroupName when using planTitle';
-            }
-
-            if (args.options.ownerGroupId && args.options.ownerGroupName) {
-              return 'Specify either ownerGroupId or ownerGroupName when using planTitle but not both';
-            }
-
-            if (args.options.ownerGroupId && !validation.isValidGuid(args.options.ownerGroupId)) {
-              return `${args.options.ownerGroupId} is not a valid GUID`;
-            }
-          }
-
-          if (args.options.planId) {
-            if (args.options.ownerGroupId || args.options.ownerGroupName) {
-              return 'Don\'t specify ownerGroupId or ownerGroupName when using planId';
-            }
+          if (args.options.rosterId && (args.options.ownerGroupId || args.options.ownerGroupName)) {
+            return 'Don\'t specify ownerGroupId or ownerGroupName when using rosterId';
           }
         }
 
@@ -135,7 +122,15 @@ class PlannerBucketSetCommand extends GraphCommand {
 
   #initOptionSets(): void {
     this.optionSets.push(
-      { options: ['id', 'name'] }
+      { options: ['id', 'name'] },
+      {
+        options: ['planId', 'planTitle', 'rosterId'],
+        runsWhen: (args) => args.options.name !== undefined
+      },
+      {
+        options: ['ownerGroupId', 'ownerGroupName'],
+        runsWhen: (args) => args.options.planTitle !== undefined
+      }
     );
   }
 
@@ -168,7 +163,7 @@ class PlannerBucketSetCommand extends GraphCommand {
     }
   }
 
-  private getBucket(args: CommandArgs): Promise<PlannerBucket> {
+  private async getBucket(args: CommandArgs): Promise<PlannerBucket> {
     if (args.options.id) {
       const requestOptions: CliRequestOptions = {
         url: `${this.resource}/v1.0/planner/buckets/${args.options.id}`,
@@ -178,60 +173,58 @@ class PlannerBucketSetCommand extends GraphCommand {
         responseType: 'json'
       };
 
-      return request.get<PlannerBucket>(requestOptions);
+      return await request.get<PlannerBucket>(requestOptions);
     }
 
-    return this
-      .getPlanId(args)
-      .then(planId => {
-        const requestOptions: CliRequestOptions = {
-          url: `${this.resource}/v1.0/planner/plans/${planId}/buckets`,
-          headers: {
-            accept: 'application/json'
-          },
-          responseType: 'json'
-        };
+    const planId = await this.getPlanId(args);
+    const requestOptions: CliRequestOptions = {
+      url: `${this.resource}/v1.0/planner/plans/${planId}/buckets`,
+      headers: {
+        accept: 'application/json'
+      },
+      responseType: 'json'
+    };
 
-        return request.get<{ value: PlannerBucket[] }>(requestOptions);
-      })
-      .then(buckets => {
-        const filteredBuckets = buckets.value.filter(b => args.options.name!.toLowerCase() === b.name!.toLowerCase());
+    const buckets = await request.get<{ value: PlannerBucket[] }>(requestOptions);
+    const filteredBuckets = buckets.value.filter(b => args.options.name!.toLowerCase() === b.name!.toLowerCase());
 
-        if (!filteredBuckets.length) {
-          return Promise.reject(`The specified bucket ${args.options.name} does not exist`);
-        }
+    if (!filteredBuckets.length) {
+      throw `The specified bucket ${args.options.name} does not exist`;
+    }
 
-        if (filteredBuckets.length > 1) {
-          return Promise.reject(`Multiple buckets with name ${args.options.name} found: ${filteredBuckets.map(x => x.id)}`);
-        }
+    if (filteredBuckets.length > 1) {
+      throw `Multiple buckets with name ${args.options.name} found: ${filteredBuckets.map(x => x.id)}`;
+    }
 
-        return Promise.resolve(filteredBuckets[0]);
-      });
+    return filteredBuckets[0];
   }
 
-  private getPlanId(args: CommandArgs): Promise<string> {
-    const { planId, planTitle } = args.options;
+  private async getPlanId(args: CommandArgs): Promise<string> {
+    const { planId, planTitle, rosterId } = args.options;
 
     if (planId) {
-      return Promise.resolve(planId);
+      return planId;
     }
 
-    return this
-      .getGroupId(args)
-      .then(groupId => planner.getPlanByTitle(planTitle!, groupId))
-      .then(plan => plan.id!);
+    if (planTitle) {
+      const groupId: string = await this.getGroupId(args);
+      const plan = await planner.getPlanByTitle(planTitle, groupId);
+      return plan.id!;
+    }
+
+    const plans = await planner.getPlansByRosterId(rosterId!);
+    return plans[0].id!;
   }
 
-  private getGroupId(args: CommandArgs): Promise<string> {
+  private async getGroupId(args: CommandArgs): Promise<string> {
     const { ownerGroupId, ownerGroupName } = args.options;
 
     if (ownerGroupId) {
-      return Promise.resolve(ownerGroupId);
+      return ownerGroupId;
     }
 
-    return aadGroup
-      .getGroupByDisplayName(ownerGroupName!)
-      .then(group => group.id!);
+    const group = await aadGroup.getGroupByDisplayName(ownerGroupName!);
+    return group.id!;
   }
 }
 

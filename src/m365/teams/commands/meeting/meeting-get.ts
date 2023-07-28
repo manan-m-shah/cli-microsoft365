@@ -1,16 +1,14 @@
 import auth from '../../../../Auth';
-import { Cli } from '../../../../cli/Cli';
-import Command from '../../../../Command';
 import { Logger } from '../../../../cli/Logger';
 import GlobalOptions from '../../../../GlobalOptions';
 import request, { CliRequestOptions } from '../../../../request';
 import GraphCommand from "../../../base/GraphCommand";
 import commands from '../../commands';
-import { Meeting } from '../Meeting';
 import { validation } from '../../../../utils/validation';
 import { accessToken } from '../../../../utils/accessToken';
-import * as AadUserGetCommand from '../../../aad/commands/user/user-get';
-import { Options as AadUserGetCommandOptions } from '../../../aad/commands/user/user-get';
+import { Event } from '@microsoft/microsoft-graph-types';
+import { aadUser } from '../../../../utils/aadUser';
+import { formatting } from '../../../../utils/formatting';
 
 interface CommandArgs {
   options: Options;
@@ -79,20 +77,6 @@ class TeamsMeetingGetCommand extends GraphCommand {
     );
   }
 
-  private async getUserId(options: Options): Promise<string> {
-    const commandOptions: AadUserGetCommandOptions = {
-      email: options.email,
-      userName: options.userName,
-      output: 'json',
-      debug: this.debug,
-      verbose: this.verbose
-    };
-
-    const output = await Cli.executeCommandWithOutput(AadUserGetCommand as Command, { options: { ...commandOptions, _: [] } });
-    const getUserOutput = JSON.parse(output.stdout);
-    return getUserOutput.id;
-  }
-
   public async commandAction(logger: Logger, args: CommandArgs): Promise<void> {
     const isAppOnlyAccessToken: boolean | undefined = accessToken.isAppOnlyAccessToken(auth.service.accessTokens[this.resource].accessToken);
     if (isAppOnlyAccessToken) {
@@ -115,19 +99,15 @@ class TeamsMeetingGetCommand extends GraphCommand {
 
       if (isAppOnlyAccessToken) {
         requestUrl += 'users/';
-        if (args.options.userId) {
-          requestUrl += args.options.userId;
-        }
-        else {
-          const userId = await this.getUserId(args.options);
-          requestUrl += userId;
-        }
+
+        const userId = await this.getUserId(args.options);
+        requestUrl += userId;
       }
       else {
         requestUrl += `me`;
       }
 
-      requestUrl += `/onlineMeetings?$filter=JoinWebUrl eq '${encodeURIComponent(args.options.joinUrl)}'`;
+      requestUrl += `/onlineMeetings?$filter=JoinWebUrl eq '${formatting.encodeQueryParameter(args.options.joinUrl)}'`;
 
       const requestOptions: CliRequestOptions = {
         url: requestUrl,
@@ -137,7 +117,7 @@ class TeamsMeetingGetCommand extends GraphCommand {
         responseType: 'json'
       };
 
-      const res = await request.get<{ value: Meeting[] }>(requestOptions);
+      const res = await request.get<{ value: Event[] }>(requestOptions);
 
       if (res.value.length > 0) {
         logger.log(res.value[0]);
@@ -149,6 +129,18 @@ class TeamsMeetingGetCommand extends GraphCommand {
     catch (err: any) {
       this.handleRejectedODataJsonPromise(err);
     }
+  }
+
+  private async getUserId(options: Options): Promise<string> {
+    if (options.userId) {
+      return options.userId;
+    }
+
+    if (options.userName) {
+      return aadUser.getUserIdByUpn(options.userName);
+    }
+
+    return aadUser.getUserIdByEmail(options.email!);
   }
 }
 
